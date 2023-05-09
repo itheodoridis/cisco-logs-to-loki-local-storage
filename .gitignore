@@ -1,0 +1,9 @@
+*.log
+*.csv
+*.txt
+*.xlsx
+*credentials*
+ssl/
+grafana/ssl/
+.git-credentials
+.vscode/

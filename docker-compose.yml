@@ -1,0 +1,133 @@
+version: '3.8'
+
+networks:
+  monitor-net:
+    driver: bridge
+
+volumes:
+    grafana_data: {}
+    loki_data: {}
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    hostname: grafana_srv-hostname-01
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - /opt/loki/ssl:/etc/grafana/ssl
+      - ./grafana/etc/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/etc/ldap.toml:/etc/grafana/ldap.toml
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - GF_SERVER_ROOT_URL=https://srv-hostname-01.domain.com:3000/
+      - GF_SERVER_PROTOCOL=https
+      - GF_SERVER_DOMAIN=domain.com
+      - GF_SECURITY_ADMIN_USER=${ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD:-Passw0rd}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=magnesium-wordcloud-panel
+      - GF_SERVER_CERT_FILE=/etc/grafana/ssl/srv-hostname-01.crt
+      - GF_SERVER_CERT_KEY=/etc/grafana/ssl/srv-hostname-01.nopasswd.key.pem
+      - GF_ALERTING_ENABLED=true
+      - GF_ALERTING_EXECUTE_ALERTS=true
+      - GF_AUTH.LDAP_ENABLED=true
+      - GF_AUTH.LDAP_CONFIG_FILE=/etc/grafana/ldap.toml
+      - GF_AUTH.LDAP_ALLOW_SIGN_UP=true
+      - GF_FEATURE_TOGGLES_ENABLE=ngalert
+      - GF_PLUGINS_PLUGIN_ADMIN_ENABLED=true
+
+    restart: unless-stopped
+    expose:
+      - 3000
+    ports:
+      - 3000:3000
+    networks:
+      - monitor-net
+
+  loki:
+    image: grafana/loki:2.8.0
+    container_name: loki
+    hostname: loki_srv-hostname-01
+    restart: unless-stopped
+    volumes:
+      - loki_data:/loki
+      - ./loki/config-loki.yml:/etc/loki/local-config.yml
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - 3100
+    ports:
+      - 3100:3100
+    networks:
+      - monitor-net
+
+  promtail:
+    image: grafana/promtail:2.8.0
+    container_name: promtail
+    hostname: promtail_srv-hostname-01
+    volumes:
+      - "./promtail/config-promtail.yml:/etc/promtail/local-config.yaml"
+      - "./nwlogs/fromcisco.log:/var/log/fromcisco.log:rw"
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    entrypoint: /usr/bin/promtail -config.file=/etc/promtail/local-config.yaml
+    expose:
+      - 9080
+      - 1514
+    ports:
+      - 9080:9080
+      - 1514:1514
+    networks:
+      - monitor-net
+
+  syslog-ng:
+    image: balabit/syslog-ng:3.38.1
+    container_name: syslog-ng
+    hostname: syslog-ng_srv-hostname-01
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - "./syslog-ng/logs:/var/log/syslog-ng"
+      - "./syslog-ng/socket:/var/run/syslog-ng"
+      - "./syslog-ng/config/:/etc/syslog-ng"
+      - "./nwlogs/fromcisco.log:/var/log/fromcisco.log:rw"
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - 514
+      - 601
+      - 6514
+    ports:
+      - protocol: udp
+        published: 514
+        target: 514
+        mode: host
+      - protocol: tcp
+        published: 514
+        target: 514
+        mode: host
+      - 601:601
+      - 6514:6514
+    networks:
+      - monitor-net
+
+  logrotate:
+    image: blacklabelops/logrotate:latest
+    container_name: logrotate
+    hostname: logrotate_srv-hostname-01
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - "/opt/loki/nwlogs:/opt/loki/nwlogs:rw"
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - LOGS_DIRECTORIES=/opt/loki/nwlogs
+      - LOGROTATE_COMPRESSION=compress
+      - LOGROTATE_SIZE=10M
+      - LOGROTATE_COPIES=10
+      - LOGROTATE_INTERVAL=daily
+      - LOGROTATE_DATEFORMAT=-%d%m%Y
+      - TZ=Europe/Athens
