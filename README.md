@@ -21,10 +21,13 @@ The software versions used to create this were the following:
 - Loki 2.8.2
 - Promtail 2.8.2
 - Syslog-ng 3.38.1
+- blacklabelops/logrotate (latest version)
 
 ## What you need to do besides cloning this
 
 - create an ssl directory under the grafana folder, and place the certificate files you need there in order to run Grafana in https. You can easily find a way to generate self-signed certificates or use certs from a private CA if you have that in your organization. If you mean to use this in a publicly facing network then you should use regular certificates from a Public CA but in that case maybe you should reconsider if you really want to use Docker for that (most of the time people advise against its use in production, let alone in public facing systems). Make sure you put the correct filenames for the certs and the hostname for your server (better create also an alias without the domain suffix while you are at it). Those names need to be adjusted in the docker-compose.yml file as well, both in the bind volume entries but also in the enviroment variables.
+- change the owner and/or file rights for the nwlogs dir and the files in it, or the syslog-ng service/container will not be able to write the logs to the file(s)
+- create the file before you start the containers, or docker will think that fromcisco.log is a folder and will go on and create that for you. Syslog-ng will not be able to write logs to a folder instead of a file. All that can be easily detected if you check the logs.
 - start the containers with docker-compose up -d or docker compose up -d if you have a recent edition of docker and docker compose.
 
 ## Having trouble?
